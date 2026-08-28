@@ -74,6 +74,12 @@ Supported thinking levels:
 off, minimal, low, medium, high, xhigh, max
 ```
 
+Supported tools are limited to Pi's minimal built-in tool set:
+
+```text
+read, write, edit, bash
+```
+
 Configure profile tools from Pi:
 
 ```text
@@ -83,9 +89,9 @@ Configure profile tools from Pi:
 Examples:
 
 ```text
-/profile tools reviewer read grep find ls
-/profile tools planner read grep find ls
-/profile tools coder read grep find ls bash edit write
+/profile tools reviewer read
+/profile tools planner read
+/profile tools coder read bash edit write
 ```
 
 Configure a shortcut from Pi:
@@ -126,7 +132,7 @@ Example configuration file:
       "provider": "openai-codex",
       "model": "gpt-5.6-sol",
       "thinkingLevel": "xhigh",
-      "tools": ["read", "grep", "find", "ls"]
+      "tools": ["read"]
     },
     "coder": {
       "provider": "openai-codex",
@@ -149,15 +155,15 @@ The extension also exposes `configure_profile`, `configure_profile_tools`, and `
 
 The built-in defaults are:
 
-- reviewer: `openai-codex/gpt-5.6-luna`, thinking `medium`
-- planner: `openai-codex/gpt-5.6-sol`, thinking `xhigh`
-- coder: `openai-codex/gpt-5.6-terra`, thinking `high`
+- reviewer: `openai-codex/gpt-5.6-luna`, thinking `medium`, tools `read`
+- planner: `openai-codex/gpt-5.6-sol`, thinking `xhigh`, tools `read`
+- coder: `openai-codex/gpt-5.6-terra`, thinking `high`, tools `read`, `bash`, `edit`, `write`
 
 ## Contributing
 
 Contributions are welcome. Good first contributions include:
 
-- Additional profile presets.
+- Additional profile presets that only use Pi's minimal built-in tools.
 - Better documentation and examples.
 - Safer profile policies.
 - Tests or validation scripts.

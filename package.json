@@ -1,6 +1,6 @@
 {
   "name": "@isanchez31/pi-profiles",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Named reviewer, planner, and coder profiles for pi with model, thinking level, tools, shortcuts, and profile-specific instructions.",
   "author": {
     "name": "Ivan Sanchez",

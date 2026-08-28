@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows Conventional Commits for commit messages.
 
+## 1.3.1 - 2026-08-28
+
+### Fixed
+
+- Limit default and configurable profile tools to Pi's minimal built-in tool set: `read`, `write`, `edit`, and `bash`.
+- Ignore unsupported tools from existing local config when applying profiles.
+
 ## 1.3.0 - 2026-08-28
 
 ### Added

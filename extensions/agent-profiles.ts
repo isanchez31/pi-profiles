@@ -36,25 +36,26 @@ const DEFAULT_PROFILES: Record<BuiltInProfileName, Profile> = {
     provider: "openai-codex",
     model: "gpt-5.6-luna",
     thinkingLevel: "medium",
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read"],
     instructions: `You are in REVIEWER mode. Analyze the project or changes thoroughly, but never modify files or execute commands. Use only the available read-only tools. Report findings ordered by severity, with concrete file and line references when possible. Do not propose implementation steps unless the user asks.`,
   },
   planner: {
     provider: "openai-codex",
     model: "gpt-5.6-sol",
     thinkingLevel: "xhigh",
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read"],
     instructions: `You are in PLANNER mode. Investigate the codebase thoroughly and produce a precise, actionable implementation plan. Do not modify files or execute commands. Before finalizing, identify affected files, dependencies, risks, edge cases, validation steps, and unanswered questions. Present the plan as numbered steps.`,
   },
   coder: {
     provider: "openai-codex",
     model: "gpt-5.6-terra",
     thinkingLevel: "high",
-    tools: ["read", "grep", "find", "ls", "bash", "edit", "write"],
+    tools: ["read", "bash", "edit", "write"],
     instructions: `You are in CODER mode. Implement the requested change carefully. Read relevant code before modifying it, keep changes focused, and run the relevant checks or tests when practical. Summarize the changes and validation performed.`,
   },
 };
 
+const SUPPORTED_MINIMAL_TOOLS = new Set(["read", "write", "edit", "bash"]);
 const READ_ONLY_PROFILES = new Set<ProfileName>(["reviewer", "planner"]);
 const BUILT_IN_PROFILE_NAMES = Object.keys(DEFAULT_PROFILES) as BuiltInProfileName[];
 const DEFAULT_SHORTCUTS: Record<string, string> = {
@@ -162,6 +163,10 @@ export default function agentProfiles(pi: ExtensionAPI) {
   }
 
   function saveProfileTools(name: ProfileName, tools: string[]) {
+    const unsupportedTools = tools.filter((tool) => !SUPPORTED_MINIMAL_TOOLS.has(tool));
+    if (unsupportedTools.length > 0) {
+      throw new Error(`Unsupported tools for minimal pi configuration: ${unsupportedTools.join(", ")}`);
+    }
     overrides.profiles ??= {};
     overrides.profiles[name] = {
       ...(overrides.profiles[name] ?? {}),
@@ -193,9 +198,14 @@ export default function agentProfiles(pi: ExtensionAPI) {
     captureBaseline(ctx);
     pi.setThinkingLevel(profile.thinkingLevel);
 
+    const supportedProfileTools = profile.tools.filter((tool) => SUPPORTED_MINIMAL_TOOLS.has(tool));
+    const unsupportedProfileTools = profile.tools.filter((tool) => !SUPPORTED_MINIMAL_TOOLS.has(tool));
     const knownTools = new Set(pi.getAllTools().map((tool) => tool.name));
-    const missingTools = profile.tools.filter((tool) => !knownTools.has(tool));
-    pi.setActiveTools(profile.tools.filter((tool) => knownTools.has(tool)));
+    const missingTools = supportedProfileTools.filter((tool) => !knownTools.has(tool));
+    pi.setActiveTools(supportedProfileTools.filter((tool) => knownTools.has(tool)));
+    if (unsupportedProfileTools.length > 0) {
+      ctx.ui.notify(`Profile "${name}": unsupported tools ignored: ${unsupportedProfileTools.join(", ")}`, "warning");
+    }
     if (missingTools.length > 0) {
       ctx.ui.notify(`Profile "${name}": unavailable tools: ${missingTools.join(", ")}`, "warning");
     }
@@ -281,9 +291,14 @@ export default function agentProfiles(pi: ExtensionAPI) {
           ctx.ui.notify("Usage: /profile tools <name> <tool...>", "error");
           return;
         }
+        try {
+          saveProfileTools(name, tools);
+        } catch (error) {
+          ctx.ui.notify(`${error instanceof Error ? error.message : String(error)}\nSupported tools: ${Array.from(SUPPORTED_MINIMAL_TOOLS).join(", ")}`, "error");
+          return;
+        }
         const knownTools = new Set(pi.getAllTools().map((tool) => tool.name));
         const missingTools = tools.filter((tool) => !knownTools.has(tool));
-        saveProfileTools(name, tools);
         ctx.ui.notify(
           `Tools for "${name}" saved as ${tools.join(", ")}${
             missingTools.length > 0 ? `\nUnavailable now: ${missingTools.join(", ")}` : ""
@@ -360,7 +375,20 @@ export default function agentProfiles(pi: ExtensionAPI) {
       tools: Type.Array(Type.String(), { description: "Tool names to enable for this profile" }),
     }),
     async execute(_toolCallId, params) {
-      saveProfileTools(params.name, params.tools);
+      try {
+        saveProfileTools(params.name, params.tools);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${error instanceof Error ? error.message : String(error)}\nSupported tools: ${Array.from(SUPPORTED_MINIMAL_TOOLS).join(", ")}`,
+            },
+          ],
+          isError: true,
+          details: { configPath: CONFIG_PATH },
+        };
+      }
       return {
         content: [
           {
@@ -413,7 +441,7 @@ export default function agentProfiles(pi: ExtensionAPI) {
   pi.on("tool_call", (event) => {
     if (!activeProfile || !READ_ONLY_PROFILES.has(activeProfile)) return;
     const profile = getProfile(activeProfile);
-    if (profile && !profile.tools.includes(event.toolName)) {
+    if (profile && !profile.tools.filter((tool) => SUPPORTED_MINIMAL_TOOLS.has(tool)).includes(event.toolName)) {
       return { block: true, reason: `${activeProfile} profile permits read-only tools only`, terminate: true };
     }
   });
