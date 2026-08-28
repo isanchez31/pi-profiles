@@ -13,9 +13,9 @@ If this project helps your workflow, consider starring the repository and sharin
 
 - Keep separate profiles for review, planning, and implementation.
 - Use safer read-only profiles for code review and planning.
-- Configure model and reasoning level dynamically without editing the extension source.
-- Persist profile overrides in a simple JSON file.
-- Let the assistant configure profiles through the `configure_profile` tool.
+- Configure model, reasoning level, and shortcuts dynamically without editing the extension source.
+- Persist profile and shortcut overrides in a simple JSON file.
+- Let the assistant configure profiles through the `configure_profile` and `configure_profile_shortcut` tools.
 
 ## Profiles
 
@@ -48,7 +48,7 @@ pi update npm:@isanchez31/pi-profiles
 
 ## Dynamic configuration
 
-Profiles are configurable. Overrides are stored in:
+Profiles and shortcuts are configurable. Overrides are stored in:
 
 ```text
 ~/.pi/agent/pi-profiles.json
@@ -74,7 +74,24 @@ Supported thinking levels:
 off, minimal, low, medium, high, xhigh, max
 ```
 
-Reset one profile override:
+Configure a shortcut from Pi:
+
+```text
+/profile shortcut <name|off> <shortcut>
+```
+
+Examples:
+
+```text
+/profile shortcut reviewer f2
+/profile shortcut planner f3
+/profile shortcut coder f4
+/profile shortcut off f12
+```
+
+Shortcut changes reload Pi automatically when configured through the command. If you edit the JSON file manually, run `/reload` or restart Pi.
+
+Reset one profile override and shortcut:
 
 ```text
 /profile reset planner
@@ -101,11 +118,17 @@ Example configuration file:
       "model": "gpt-5.6-terra",
       "thinkingLevel": "high"
     }
+  },
+  "shortcuts": {
+    "off": "f5",
+    "reviewer": "f6",
+    "planner": "f7",
+    "coder": "f8"
   }
 }
 ```
 
-The extension also exposes a `configure_profile` tool so the assistant can configure profile models and thinking levels when you ask it to.
+The extension also exposes `configure_profile` and `configure_profile_shortcut` tools so the assistant can configure profile models, thinking levels, and shortcuts when you ask it to.
 
 ## Default configuration
 

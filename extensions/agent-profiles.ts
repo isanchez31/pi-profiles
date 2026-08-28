@@ -18,6 +18,7 @@ interface Profile {
 
 interface ProfileOverrides {
   profiles?: Record<string, Partial<Profile>>;
+  shortcuts?: Record<string, string>;
 }
 
 interface Baseline {
@@ -56,6 +57,12 @@ const DEFAULT_PROFILES: Record<BuiltInProfileName, Profile> = {
 
 const READ_ONLY_PROFILES = new Set<ProfileName>(["reviewer", "planner"]);
 const BUILT_IN_PROFILE_NAMES = Object.keys(DEFAULT_PROFILES) as BuiltInProfileName[];
+const DEFAULT_SHORTCUTS: Record<string, string> = {
+  off: "f5",
+  reviewer: "f6",
+  planner: "f7",
+  coder: "f8",
+};
 
 function isThinkingLevel(value: string): value is ThinkingLevel {
   return THINKING_LEVELS.includes(value as ThinkingLevel);
@@ -90,15 +97,27 @@ function mergeProfiles(overrides: ProfileOverrides): Record<string, Profile> {
   return profiles;
 }
 
+function mergeShortcuts(overrides: ProfileOverrides): Record<string, string> {
+  return { ...DEFAULT_SHORTCUTS, ...(overrides.shortcuts ?? {}) };
+}
+
+function formatShortcuts(shortcuts: Record<string, string>): string {
+  return Object.entries(shortcuts)
+    .map(([name, shortcut]) => `${name}: ${shortcut}`)
+    .join("\n");
+}
+
 export default function agentProfiles(pi: ExtensionAPI) {
   let activeProfile: ProfileName | undefined;
   let baseline: Baseline | undefined;
   let overrides = loadOverrides();
   let profiles = mergeProfiles(overrides);
+  let shortcuts = mergeShortcuts(overrides);
 
   function reloadProfiles() {
     overrides = loadOverrides();
     profiles = mergeProfiles(overrides);
+    shortcuts = mergeShortcuts(overrides);
   }
 
   function getProfile(name: ProfileName): Profile | undefined {
@@ -133,6 +152,13 @@ export default function agentProfiles(pi: ExtensionAPI) {
     };
     saveOverrides(overrides);
     profiles = mergeProfiles(overrides);
+  }
+
+  function saveShortcut(name: ProfileName | "off", shortcut: string) {
+    overrides.shortcuts ??= {};
+    overrides.shortcuts[name] = shortcut;
+    saveOverrides(overrides);
+    shortcuts = mergeShortcuts(overrides);
   }
 
   async function applyProfile(name: ProfileName, ctx: ExtensionContext, persist = true): Promise<boolean> {
@@ -199,7 +225,7 @@ export default function agentProfiles(pi: ExtensionAPI) {
   for (const name of BUILT_IN_PROFILE_NAMES) registerProfileCommand(name);
 
   pi.registerCommand("profile", {
-    description: "Manage profiles: /profile, /profile <name>, /profile set <name> <provider/model> <thinking>, /profile off",
+    description: "Manage profiles: /profile, /profile <name>, /profile set <name> <provider/model> <thinking>, /profile shortcut <name|off> <shortcut>, /profile off",
     handler: async (args, ctx) => {
       const parts = args.trim().split(/\s+/).filter(Boolean);
       const [action, ...rest] = parts;
@@ -210,7 +236,7 @@ export default function agentProfiles(pi: ExtensionAPI) {
         const available = Object.entries(profiles)
           .map(([name, profile]) => `${name}: ${profile.provider}/${profile.model} thinking:${profile.thinkingLevel}`)
           .join("\n");
-        ctx.ui.notify(`${active}\n\nAvailable profiles:\n${available}\n\nConfig file: ${CONFIG_PATH}`, "info");
+        ctx.ui.notify(`${active}\n\nAvailable profiles:\n${available}\n\nShortcuts:\n${formatShortcuts(shortcuts)}\n\nConfig file: ${CONFIG_PATH}`, "info");
         return;
       }
 
@@ -239,15 +265,29 @@ export default function agentProfiles(pi: ExtensionAPI) {
         return;
       }
 
+      if (action === "shortcut") {
+        const [name, shortcut] = rest;
+        if (!name || !shortcut) {
+          ctx.ui.notify("Usage: /profile shortcut <name|off> <shortcut>", "error");
+          return;
+        }
+        saveShortcut(name, shortcut);
+        ctx.ui.notify(`Shortcut for "${name}" saved as ${shortcut}. Reloading to apply it.`, "info");
+        await ctx.reload();
+        return;
+      }
+
       if (action === "reset") {
         const [name] = rest;
         if (!name) {
           overrides = {};
         } else {
           delete overrides.profiles?.[name];
+          delete overrides.shortcuts?.[name];
         }
         saveOverrides(overrides);
         profiles = mergeProfiles(overrides);
+        shortcuts = mergeShortcuts(overrides);
         ctx.ui.notify(name ? `Profile "${name}" reset to defaults` : "All profile overrides reset", "info");
         return;
       }
@@ -282,10 +322,35 @@ export default function agentProfiles(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerShortcut("f5", { description: "Disable agent profile", handler: deactivateProfiles });
-  pi.registerShortcut("f6", { description: "Activate reviewer profile", handler: (ctx) => applyProfile("reviewer", ctx) });
-  pi.registerShortcut("f7", { description: "Activate planner profile", handler: (ctx) => applyProfile("planner", ctx) });
-  pi.registerShortcut("f8", { description: "Activate coder profile", handler: (ctx) => applyProfile("coder", ctx) });
+  pi.registerTool({
+    name: "configure_profile_shortcut",
+    label: "Configure Profile Shortcut",
+    description: "Configure the keyboard shortcut used by a pi profile. The new shortcut applies after reload.",
+    parameters: Type.Object({
+      name: Type.String({ description: "Profile name or off, for example reviewer, planner, coder, or off" }),
+      shortcut: Type.String({ description: "Shortcut name, for example f6, f7, f8, or ctrl+shift+p" }),
+    }),
+    async execute(_toolCallId, params) {
+      saveShortcut(params.name, params.shortcut);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Shortcut for "${params.name}" configured as ${params.shortcut}. Reload pi to apply the new shortcut.`,
+          },
+        ],
+        details: { configPath: CONFIG_PATH },
+      };
+    },
+  });
+
+  for (const [name, shortcut] of Object.entries(shortcuts)) {
+    if (name === "off") {
+      pi.registerShortcut(shortcut, { description: "Disable agent profile", handler: deactivateProfiles });
+      continue;
+    }
+    pi.registerShortcut(shortcut, { description: `Activate ${name} profile`, handler: (ctx) => applyProfile(name, ctx) });
+  }
 
   pi.on("before_agent_start", (event) => {
     if (!activeProfile) return;
