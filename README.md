@@ -29,8 +29,8 @@ pi -e npm:@isanchez31/pi-profiles
 The default model IDs are defined in `extensions/agent-profiles.ts`:
 
 - reviewer: `openai-codex/gpt-5.6-luna`
-- planner: `openai-codex/gpt-5.6-terra`
-- coder: `openai-codex/gpt-5.6-sol`
+- planner: `openai-codex/gpt-5.6-sol`
+- coder: `openai-codex/gpt-5.6-terra`
 
 Fork or edit the package if you want different model IDs per profile.
 

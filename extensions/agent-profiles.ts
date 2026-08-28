@@ -29,14 +29,14 @@ const PROFILES: Record<ProfileName, Profile> = {
   },
   planner: {
     provider: "openai-codex",
-    model: "gpt-5.6-terra",
+    model: "gpt-5.6-sol",
     thinkingLevel: "xhigh",
     tools: ["read", "grep", "find", "ls"],
     instructions: `You are in PLANNER mode. Investigate the codebase thoroughly and produce a precise, actionable implementation plan. Do not modify files or execute commands. Before finalizing, identify affected files, dependencies, risks, edge cases, validation steps, and unanswered questions. Present the plan as numbered steps.`,
   },
   coder: {
     provider: "openai-codex",
-    model: "gpt-5.6-sol",
+    model: "gpt-5.6-terra",
     thinkingLevel: "high",
     tools: ["read", "grep", "find", "ls", "bash", "edit", "write"],
     instructions: `You are in CODER mode. Implement the requested change carefully. Read relevant code before modifying it, keep changes focused, and run the relevant checks or tests when practical. Summarize the changes and validation performed.`,
