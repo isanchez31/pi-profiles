@@ -1,7 +1,12 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { Type } from "typebox";
 
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-type ProfileName = "reviewer" | "planner" | "coder";
+type BuiltInProfileName = "reviewer" | "planner" | "coder";
+type ProfileName = BuiltInProfileName | string;
 
 interface Profile {
   provider: string;
@@ -11,6 +16,10 @@ interface Profile {
   instructions: string;
 }
 
+interface ProfileOverrides {
+  profiles?: Record<string, Partial<Profile>>;
+}
+
 interface Baseline {
   provider?: string;
   model?: string;
@@ -18,8 +27,10 @@ interface Baseline {
   tools: string[];
 }
 
-// Adjust these three model IDs if you want to use a different model per profile.
-const PROFILES: Record<ProfileName, Profile> = {
+const CONFIG_PATH = join(homedir(), ".pi", "agent", "pi-profiles.json");
+const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+const DEFAULT_PROFILES: Record<BuiltInProfileName, Profile> = {
   reviewer: {
     provider: "openai-codex",
     model: "gpt-5.6-luna",
@@ -44,11 +55,55 @@ const PROFILES: Record<ProfileName, Profile> = {
 };
 
 const READ_ONLY_PROFILES = new Set<ProfileName>(["reviewer", "planner"]);
-const PROFILE_NAMES = Object.keys(PROFILES) as ProfileName[];
+const BUILT_IN_PROFILE_NAMES = Object.keys(DEFAULT_PROFILES) as BuiltInProfileName[];
+
+function isThinkingLevel(value: string): value is ThinkingLevel {
+  return THINKING_LEVELS.includes(value as ThinkingLevel);
+}
+
+function parseModelRef(modelRef: string): { provider: string; model: string } | undefined {
+  const slashIndex = modelRef.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === modelRef.length - 1) return undefined;
+  return { provider: modelRef.slice(0, slashIndex), model: modelRef.slice(slashIndex + 1) };
+}
+
+function loadOverrides(): ProfileOverrides {
+  if (!existsSync(CONFIG_PATH)) return {};
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as ProfileOverrides;
+  } catch {
+    return {};
+  }
+}
+
+function saveOverrides(overrides: ProfileOverrides) {
+  mkdirSync(dirname(CONFIG_PATH), { recursive: true });
+  writeFileSync(CONFIG_PATH, `${JSON.stringify(overrides, null, 2)}\n`);
+}
+
+function mergeProfiles(overrides: ProfileOverrides): Record<string, Profile> {
+  const profiles: Record<string, Profile> = { ...DEFAULT_PROFILES };
+  for (const [name, override] of Object.entries(overrides.profiles ?? {})) {
+    const base = profiles[name] ?? DEFAULT_PROFILES.coder;
+    profiles[name] = { ...base, ...override };
+  }
+  return profiles;
+}
 
 export default function agentProfiles(pi: ExtensionAPI) {
   let activeProfile: ProfileName | undefined;
   let baseline: Baseline | undefined;
+  let overrides = loadOverrides();
+  let profiles = mergeProfiles(overrides);
+
+  function reloadProfiles() {
+    overrides = loadOverrides();
+    profiles = mergeProfiles(overrides);
+  }
+
+  function getProfile(name: ProfileName): Profile | undefined {
+    return profiles[name];
+  }
 
   function updateStatus(ctx: ExtensionContext) {
     ctx.ui.setStatus(
@@ -68,17 +123,34 @@ export default function agentProfiles(pi: ExtensionAPI) {
     pi.appendEntry("agent-profile-baseline", baseline);
   }
 
-  async function applyProfile(name: ProfileName, ctx: ExtensionContext, persist = true): Promise<boolean> {
-    const profile = PROFILES[name];
-    const model = ctx.modelRegistry.find(profile.provider, profile.model);
+  function saveProfileModel(name: ProfileName, provider: string, model: string, thinkingLevel: ThinkingLevel) {
+    overrides.profiles ??= {};
+    overrides.profiles[name] = {
+      ...(overrides.profiles[name] ?? {}),
+      provider,
+      model,
+      thinkingLevel,
+    };
+    saveOverrides(overrides);
+    profiles = mergeProfiles(overrides);
+  }
 
+  async function applyProfile(name: ProfileName, ctx: ExtensionContext, persist = true): Promise<boolean> {
+    reloadProfiles();
+    const profile = getProfile(name);
+    if (!profile) {
+      ctx.ui.notify(`Profile "${name}" does not exist`, "error");
+      return false;
+    }
+
+    const model = ctx.modelRegistry.find(profile.provider, profile.model);
     if (!model) {
-      ctx.ui.notify(`Profile \"${name}\": model ${profile.provider}/${profile.model} is unavailable`, "error");
+      ctx.ui.notify(`Profile "${name}": model ${profile.provider}/${profile.model} is unavailable`, "error");
       return false;
     }
 
     if (!(await pi.setModel(model))) {
-      ctx.ui.notify(`Profile \"${name}\": no credentials for ${profile.provider}/${profile.model}`, "error");
+      ctx.ui.notify(`Profile "${name}": no credentials for ${profile.provider}/${profile.model}`, "error");
       return false;
     }
 
@@ -89,13 +161,13 @@ export default function agentProfiles(pi: ExtensionAPI) {
     const missingTools = profile.tools.filter((tool) => !knownTools.has(tool));
     pi.setActiveTools(profile.tools.filter((tool) => knownTools.has(tool)));
     if (missingTools.length > 0) {
-      ctx.ui.notify(`Profile \"${name}\": unavailable tools: ${missingTools.join(", ")}`, "warning");
+      ctx.ui.notify(`Profile "${name}": unavailable tools: ${missingTools.join(", ")}`, "warning");
     }
 
     activeProfile = name;
     updateStatus(ctx);
     if (persist) pi.appendEntry("agent-profile-state", { name });
-    ctx.ui.notify(`Profile \"${name}\" activated (${profile.model}, thinking:${profile.thinkingLevel})`, "info");
+    ctx.ui.notify(`Profile "${name}" activated (${profile.model}, thinking:${profile.thinkingLevel})`, "info");
     return true;
   }
 
@@ -115,7 +187,7 @@ export default function agentProfiles(pi: ExtensionAPI) {
     ctx.ui.notify("Agent profile disabled; previous configuration restored.", "info");
   }
 
-  function registerProfileCommand(name: ProfileName) {
+  function registerProfileCommand(name: BuiltInProfileName) {
     pi.registerCommand(name, {
       description: `Activate the ${name} profile`,
       handler: async (_args, ctx) => {
@@ -124,28 +196,92 @@ export default function agentProfiles(pi: ExtensionAPI) {
     });
   }
 
-  for (const name of PROFILE_NAMES) registerProfileCommand(name);
+  for (const name of BUILT_IN_PROFILE_NAMES) registerProfileCommand(name);
 
   pi.registerCommand("profile", {
-    description: "Show the active profile, or disable it with /profile off",
+    description: "Manage profiles: /profile, /profile <name>, /profile set <name> <provider/model> <thinking>, /profile off",
     handler: async (args, ctx) => {
-      if (args.trim().toLowerCase() === "off") {
+      const parts = args.trim().split(/\s+/).filter(Boolean);
+      const [action, ...rest] = parts;
+
+      if (!action) {
+        reloadProfiles();
+        const active = activeProfile ? `Active: ${activeProfile}` : "No profile is active";
+        const available = Object.entries(profiles)
+          .map(([name, profile]) => `${name}: ${profile.provider}/${profile.model} thinking:${profile.thinkingLevel}`)
+          .join("\n");
+        ctx.ui.notify(`${active}\n\nAvailable profiles:\n${available}\n\nConfig file: ${CONFIG_PATH}`, "info");
+        return;
+      }
+
+      if (action === "off") {
         await deactivateProfiles(ctx);
         return;
       }
-      if (!activeProfile) {
-        ctx.ui.notify("No profile is active. Use /reviewer, /planner, or /coder.", "info");
+
+      if (action === "set") {
+        const [name, modelRef, thinkingLevel] = rest;
+        if (!name || !modelRef || !thinkingLevel || !isThinkingLevel(thinkingLevel)) {
+          ctx.ui.notify(
+            `Usage: /profile set <name> <provider/model> <thinking>\nThinking levels: ${THINKING_LEVELS.join(", ")}`,
+            "error",
+          );
+          return;
+        }
+        const parsed = parseModelRef(modelRef);
+        if (!parsed) {
+          ctx.ui.notify("Model must use provider/model format, for example openai-codex/gpt-5.6-sol", "error");
+          return;
+        }
+        saveProfileModel(name, parsed.provider, parsed.model, thinkingLevel);
+        ctx.ui.notify(`Profile "${name}" saved as ${modelRef} with thinking:${thinkingLevel}`, "info");
+        if (activeProfile === name) await applyProfile(name, ctx);
         return;
       }
-      const profile = PROFILES[activeProfile];
-      ctx.ui.notify(
-        `profile:${activeProfile} | ${profile.provider}/${profile.model} | thinking:${profile.thinkingLevel}`,
-        "info",
-      );
+
+      if (action === "reset") {
+        const [name] = rest;
+        if (!name) {
+          overrides = {};
+        } else {
+          delete overrides.profiles?.[name];
+        }
+        saveOverrides(overrides);
+        profiles = mergeProfiles(overrides);
+        ctx.ui.notify(name ? `Profile "${name}" reset to defaults` : "All profile overrides reset", "info");
+        return;
+      }
+
+      await applyProfile(action, ctx);
     },
   });
 
-  // Function keys avoid conflicts with Pi's default Ctrl-based shortcuts.
+  pi.registerTool({
+    name: "configure_profile",
+    label: "Configure Profile",
+    description: "Configure the model and thinking level used by a pi profile.",
+    parameters: Type.Object({
+      name: Type.String({ description: "Profile name, for example reviewer, planner, or coder" }),
+      provider: Type.String({ description: "Model provider, for example openai-codex" }),
+      model: Type.String({ description: "Model ID, for example gpt-5.6-sol" }),
+      thinkingLevel: Type.Union(THINKING_LEVELS.map((level) => Type.Literal(level)), {
+        description: "Thinking level for this profile",
+      }),
+    }),
+    async execute(_toolCallId, params) {
+      saveProfileModel(params.name, params.provider, params.model, params.thinkingLevel as ThinkingLevel);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Profile "${params.name}" configured as ${params.provider}/${params.model} with thinking:${params.thinkingLevel}.`,
+          },
+        ],
+        details: { configPath: CONFIG_PATH },
+      };
+    },
+  });
+
   pi.registerShortcut("f5", { description: "Disable agent profile", handler: deactivateProfiles });
   pi.registerShortcut("f6", { description: "Activate reviewer profile", handler: (ctx) => applyProfile("reviewer", ctx) });
   pi.registerShortcut("f7", { description: "Activate planner profile", handler: (ctx) => applyProfile("planner", ctx) });
@@ -153,18 +289,21 @@ export default function agentProfiles(pi: ExtensionAPI) {
 
   pi.on("before_agent_start", (event) => {
     if (!activeProfile) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${PROFILES[activeProfile].instructions}` };
+    const profile = getProfile(activeProfile);
+    if (!profile) return;
+    return { systemPrompt: `${event.systemPrompt}\n\n${profile.instructions}` };
   });
 
-  // Defense in depth: read-only profiles cannot execute a tool outside their allowlist.
   pi.on("tool_call", (event) => {
     if (!activeProfile || !READ_ONLY_PROFILES.has(activeProfile)) return;
-    if (!PROFILES[activeProfile].tools.includes(event.toolName)) {
+    const profile = getProfile(activeProfile);
+    if (profile && !profile.tools.includes(event.toolName)) {
       return { block: true, reason: `${activeProfile} profile permits read-only tools only`, terminate: true };
     }
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    reloadProfiles();
     const entries = ctx.sessionManager.getEntries();
     const savedBaseline = entries
       .filter((entry: { type: string; customType?: string }) => entry.type === "custom" && entry.customType === "agent-profile-baseline")
@@ -176,8 +315,8 @@ export default function agentProfiles(pi: ExtensionAPI) {
       .pop() as { data?: { name?: string | null } } | undefined;
 
     const name = saved?.data?.name;
-    if (name && PROFILE_NAMES.includes(name as ProfileName)) {
-      await applyProfile(name as ProfileName, ctx, false);
+    if (name && getProfile(name)) {
+      await applyProfile(name, ctx, false);
     } else {
       updateStatus(ctx);
     }
