@@ -13,9 +13,9 @@ If this project helps your workflow, consider starring the repository and sharin
 
 - Keep separate profiles for review, planning, and implementation.
 - Use safer read-only profiles for code review and planning.
-- Configure model, reasoning level, and shortcuts dynamically without editing the extension source.
-- Persist profile and shortcut overrides in a simple JSON file.
-- Let the assistant configure profiles through the `configure_profile` and `configure_profile_shortcut` tools.
+- Configure model, reasoning level, tools, and shortcuts dynamically without editing the extension source.
+- Persist profile, tool, and shortcut overrides in a simple JSON file.
+- Let the assistant configure profiles through the `configure_profile`, `configure_profile_tools`, and `configure_profile_shortcut` tools.
 
 ## Profiles
 
@@ -74,6 +74,20 @@ Supported thinking levels:
 off, minimal, low, medium, high, xhigh, max
 ```
 
+Configure profile tools from Pi:
+
+```text
+/profile tools <name> <tool...>
+```
+
+Examples:
+
+```text
+/profile tools reviewer read grep find ls
+/profile tools planner read grep find ls
+/profile tools coder read grep find ls bash edit write
+```
+
 Configure a shortcut from Pi:
 
 ```text
@@ -111,7 +125,8 @@ Example configuration file:
     "planner": {
       "provider": "openai-codex",
       "model": "gpt-5.6-sol",
-      "thinkingLevel": "xhigh"
+      "thinkingLevel": "xhigh",
+      "tools": ["read", "grep", "find", "ls"]
     },
     "coder": {
       "provider": "openai-codex",
@@ -128,7 +143,7 @@ Example configuration file:
 }
 ```
 
-The extension also exposes `configure_profile` and `configure_profile_shortcut` tools so the assistant can configure profile models, thinking levels, and shortcuts when you ask it to.
+The extension also exposes `configure_profile`, `configure_profile_tools`, and `configure_profile_shortcut` tools so the assistant can configure profile models, thinking levels, tools, and shortcuts when you ask it to.
 
 ## Default configuration
 

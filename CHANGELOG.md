@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project follows Conventional Commits for commit messages.
 
+## 1.3.0 - 2026-08-28
+
+### Added
+
+- Add configurable profile tools stored in `~/.pi/agent/pi-profiles.json`.
+- Add `/profile tools <name> <tool...>` to configure the active tools per profile.
+- Add a `configure_profile_tools` tool so the assistant can configure profile tools on request.
+
 ## 1.2.0 - 2026-08-28
 
 ### Added

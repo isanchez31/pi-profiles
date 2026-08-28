@@ -161,6 +161,16 @@ export default function agentProfiles(pi: ExtensionAPI) {
     shortcuts = mergeShortcuts(overrides);
   }
 
+  function saveProfileTools(name: ProfileName, tools: string[]) {
+    overrides.profiles ??= {};
+    overrides.profiles[name] = {
+      ...(overrides.profiles[name] ?? {}),
+      tools,
+    };
+    saveOverrides(overrides);
+    profiles = mergeProfiles(overrides);
+  }
+
   async function applyProfile(name: ProfileName, ctx: ExtensionContext, persist = true): Promise<boolean> {
     reloadProfiles();
     const profile = getProfile(name);
@@ -234,7 +244,7 @@ export default function agentProfiles(pi: ExtensionAPI) {
         reloadProfiles();
         const active = activeProfile ? `Active: ${activeProfile}` : "No profile is active";
         const available = Object.entries(profiles)
-          .map(([name, profile]) => `${name}: ${profile.provider}/${profile.model} thinking:${profile.thinkingLevel}`)
+          .map(([name, profile]) => `${name}: ${profile.provider}/${profile.model} thinking:${profile.thinkingLevel} tools:${profile.tools.join(",")}`)
           .join("\n");
         ctx.ui.notify(`${active}\n\nAvailable profiles:\n${available}\n\nShortcuts:\n${formatShortcuts(shortcuts)}\n\nConfig file: ${CONFIG_PATH}`, "info");
         return;
@@ -261,6 +271,25 @@ export default function agentProfiles(pi: ExtensionAPI) {
         }
         saveProfileModel(name, parsed.provider, parsed.model, thinkingLevel);
         ctx.ui.notify(`Profile "${name}" saved as ${modelRef} with thinking:${thinkingLevel}`, "info");
+        if (activeProfile === name) await applyProfile(name, ctx);
+        return;
+      }
+
+      if (action === "tools") {
+        const [name, ...tools] = rest;
+        if (!name || tools.length === 0) {
+          ctx.ui.notify("Usage: /profile tools <name> <tool...>", "error");
+          return;
+        }
+        const knownTools = new Set(pi.getAllTools().map((tool) => tool.name));
+        const missingTools = tools.filter((tool) => !knownTools.has(tool));
+        saveProfileTools(name, tools);
+        ctx.ui.notify(
+          `Tools for "${name}" saved as ${tools.join(", ")}${
+            missingTools.length > 0 ? `\nUnavailable now: ${missingTools.join(", ")}` : ""
+          }`,
+          missingTools.length > 0 ? "warning" : "info",
+        );
         if (activeProfile === name) await applyProfile(name, ctx);
         return;
       }
@@ -315,6 +344,28 @@ export default function agentProfiles(pi: ExtensionAPI) {
           {
             type: "text",
             text: `Profile "${params.name}" configured as ${params.provider}/${params.model} with thinking:${params.thinkingLevel}.`,
+          },
+        ],
+        details: { configPath: CONFIG_PATH },
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "configure_profile_tools",
+    label: "Configure Profile Tools",
+    description: "Configure the active tool allowlist used by a pi profile.",
+    parameters: Type.Object({
+      name: Type.String({ description: "Profile name, for example reviewer, planner, or coder" }),
+      tools: Type.Array(Type.String(), { description: "Tool names to enable for this profile" }),
+    }),
+    async execute(_toolCallId, params) {
+      saveProfileTools(params.name, params.tools);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Tools for "${params.name}" configured as ${params.tools.join(", ")}.`,
           },
         ],
         details: { configPath: CONFIG_PATH },
