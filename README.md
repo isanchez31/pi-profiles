@@ -15,13 +15,13 @@ Each profile sets a model, thinking level, active tools, status-bar label, and e
 ## Install
 
 ```bash
-pi install npm:pi-profiles
+pi install npm:@isanchez31/pi-profiles
 ```
 
 Try without installing:
 
 ```bash
-pi -e npm:pi-profiles
+pi -e npm:@isanchez31/pi-profiles
 ```
 
 ## Configuration

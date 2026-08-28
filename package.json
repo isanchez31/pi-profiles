@@ -1,5 +1,5 @@
 {
-  "name": "pi-profiles",
+  "name": "@isanchez31/pi-profiles",
   "version": "1.0.0",
   "description": "Named reviewer, planner, and coder profiles for pi with model, thinking level, tools, shortcuts, and profile-specific instructions.",
   "author": {
