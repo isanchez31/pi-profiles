@@ -1,6 +1,6 @@
 {
   "name": "@isanchez31/pi-profiles",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Named reviewer, planner, and coder profiles for pi with model, thinking level, tools, shortcuts, and profile-specific instructions.",
   "author": {
     "name": "Ivan Sanchez",
@@ -19,7 +19,12 @@
     "pi-package",
     "pi-extension",
     "pi",
-    "agent-profiles"
+    "agent-profiles",
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "typescript",
+    "profiles"
   ],
   "files": [
     "extensions",

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project follows Conventional Commits for commit messages.
 
+## 1.1.1 - 2026-08-28
+
+### Changed
+
+- Improve README with badges, project positioning, contribution ideas, and useful links.
+- Add more npm keywords for discoverability.
+
 ## 1.1.0 - 2026-08-28
 
 ### Added
