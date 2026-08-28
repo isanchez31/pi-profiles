@@ -1,0 +1,38 @@
+{
+  "name": "pi-profiles",
+  "version": "1.0.0",
+  "description": "Named reviewer, planner, and coder profiles for pi with model, thinking level, tools, shortcuts, and profile-specific instructions.",
+  "author": {
+    "name": "Ivan Sanchez",
+    "email": "ivan31.sanchez@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/isanchez31/pi-profiles#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isanchez31/pi-profiles.git"
+  },
+  "bugs": {
+    "url": "https://github.com/isanchez31/pi-profiles/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "agent-profiles"
+  ],
+  "files": [
+    "extensions",
+    "README.md",
+    "CONTRIBUTING.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
