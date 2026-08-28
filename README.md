@@ -34,6 +34,13 @@ The default model IDs are defined in `extensions/agent-profiles.ts`:
 
 Fork or edit the package if you want different model IDs per profile.
 
+## Open source
+
+- [Contributing guidelines](CONTRIBUTING.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
+
 ## License
 
 MIT

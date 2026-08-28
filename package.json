@@ -24,7 +24,10 @@
   "files": [
     "extensions",
     "README.md",
+    "CHANGELOG.md",
     "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "peerDependencies": {
